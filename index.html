@@ -6,8 +6,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <title>Timemark</title>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Condensed:wght@700&display=swap">
 <style>
   :root { color-scheme: dark; }
   body { margin:0; background:#111; color:#eee; font:16px -apple-system,system-ui,sans-serif;
@@ -43,16 +41,26 @@
 const YELLOW = '#F5B324';
 const DAYS = ['Chủ Nhật','Thứ Hai','Thứ Ba','Thứ Tư','Thứ Năm','Thứ Sáu','Thứ Bảy'];
 
-const COND = px => `700 ${px}px "Roboto Condensed", "Helvetica Neue", Arial, sans-serif`;
+// Time face identified by measuring the original screenshot: digit ink/height 0.43
+// and a proportional '1' (advance 0.62x the other digits) rule out Roboto Condensed,
+// whose figures are tabular. Pathway Gothic One matches on every metric.
+const TIME = px => `400 ${px}px "Pathway Gothic One", "Helvetica Neue", Arial, sans-serif`;
 const BODY = (px, w = 400) => `${w} ${px}px Roboto, -apple-system, "Helvetica Neue", Arial, sans-serif`;
 
-// Google Fonts splits files by unicode-range, so the Vietnamese subset only
-// downloads if we ask for it by passing sample text with those glyphs.
+const LATIN = 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD';
+const VIET  = 'U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB';
+
+// Self-hosted + registered via FontFace, not a CSS <link>: WebKit will silently
+// fall back to sans-serif on canvas for fonts it only knows from a stylesheet.
+// Roboto ships as one variable file covering 100-900, hence the shared weight range.
 const fontsReady = Promise.all([
-  document.fonts.load(COND(100), '0123456789:'),
-  document.fonts.load(BODY(30), 'Thứ Ba Tháng Chân thực ễ ạ ồ'),
-  document.fonts.load(BODY(30, 700), 'Timemark'),
-]).catch(() => {});
+  ['Pathway Gothic One', 'fonts/pathway-latin.woff2', '400',     LATIN],
+  ['Roboto',             'fonts/r-latin.woff2',       '100 900', LATIN],
+  ['Roboto',             'fonts/r-viet.woff2',        '100 900', VIET ],
+].map(([family, url, weight, unicodeRange]) =>
+  new FontFace(family, `url(${url})`, { weight, unicodeRange })
+    .load().then(f => document.fonts.add(f))
+)).catch(e => console.error('font load failed', e));
 
 const two = n => String(n).padStart(2, '0');
 const fmtTime = d => two(d.getHours()) + ':' + two(d.getMinutes());
@@ -87,43 +95,42 @@ function render(bitmap, date, place) {
   ctx.shadowColor = 'rgba(0,0,0,.55)';
   ctx.shadowBlur = 6 * s;
 
-  // Big time
+  // Big time. Size 124 puts digit ink at 87px tall, matching the original.
   ctx.fillStyle = '#fff';
-  ctx.font = COND(118 * s);
-  const timeW = ctx.measureText(fmtTime(date)).width;
-  ctx.fillText(fmtTime(date), 30 * s, H - 140 * s);
+  ctx.font = TIME(124 * s);
+  const timeEnd = 28 * s + ctx.measureText(fmtTime(date)).width;
+  ctx.fillText(fmtTime(date), 28 * s, H - 134 * s);
 
   // Yellow divider bar
-  const barX = 30 * s + timeW + 26 * s;
   ctx.fillStyle = YELLOW;
-  ctx.fillRect(barX, H - 236 * s, 5 * s, 112 * s);
+  ctx.fillRect(timeEnd + 12 * s, H - 222 * s, 4 * s, 91 * s);
 
   // Date + weekday
   ctx.fillStyle = '#fff';
-  ctx.font = BODY(31 * s);
-  ctx.fillText(fmtDate(date), barX + 26 * s, H - 198 * s);
-  ctx.fillText(fmtDay(date),  barX + 26 * s, H - 137 * s);
+  ctx.font = BODY(33 * s);
+  ctx.fillText(fmtDate(date), timeEnd + 35 * s, H - 197 * s);
+  ctx.fillText(fmtDay(date),  timeEnd + 35 * s, H - 136 * s);
 
-  // Address (wraps)
-  ctx.font = BODY(31 * s);
+  // Address (wraps, 2 lines max)
+  ctx.font = BODY(35 * s);
   wrap(ctx, place.trim(), W - 300 * s).slice(0, 2).forEach((line, i) => {
-    ctx.fillText(line, 28 * s, H - 80 * s + i * 42 * s);
+    ctx.fillText(line, 25 * s, H - 80 * s + i * 42 * s);
   });
 
   // Logo bottom-right
   ctx.textAlign = 'right';
-  ctx.font = BODY(30 * s, 700);
+  ctx.font = BODY(32 * s, 700);
   const markW = ctx.measureText('mark').width;
-  ctx.fillText('mark', W - 28 * s, H - 48 * s);
+  ctx.fillText('mark', W - 13 * s, H - 46 * s);
   ctx.fillStyle = YELLOW;
-  ctx.fillText('Time', W - 28 * s - markW, H - 48 * s);
+  ctx.fillText('Time', W - 13 * s - markW, H - 46 * s);
   ctx.fillStyle = '#ccc';
   ctx.font = BODY(20 * s);
-  ctx.fillText('100% Chân thực', W - 28 * s, H - 20 * s);
+  ctx.fillText('100% Chân thực', W - 14 * s, H - 20 * s);
 
   // Vertical verified strip on right edge
   ctx.save();
-  ctx.translate(W - 22 * s, H / 2);
+  ctx.translate(W - 15 * s, H / 2);
   ctx.rotate(-Math.PI / 2);
   ctx.textAlign = 'center';
   ctx.fillStyle = '#fff';
@@ -180,12 +187,18 @@ if (location.hash === '#test') {
   ctx.font = '20px sans-serif';
   console.assert(wrap(ctx, 'a b c', 1e6).length === 1, 'wrap one line');
   console.assert(wrap(ctx, 'aaaa bbbb cccc', 45).length >= 2, 'wrap splits');
+  // fonts.check() is useless here: a font string with fallbacks reports true even
+  // when the real face is missing. Measure instead — condensed must be narrower.
   fontsReady.then(() => {
-    const cond = document.fonts.check(COND(100));
-    const body = document.fonts.check(BODY(30), 'Thứ Ba');
-    console.assert(cond, 'Roboto Condensed not loaded');
-    console.assert(body, 'Roboto vietnamese subset not loaded');
-    alert(`self-check done — condensed:${cond} body:${body}`);
+    const m = (f, t) => { ctx.font = f; return ctx.measureText(t).width; };
+    // Narrower than a default sans, and '1' must be proportional (narrower than '5').
+    const narrow = m(TIME(100), '11:54') / m('400 100px sans-serif', '11:54');
+    const prop = m(TIME(100), '11') / m(TIME(100), '55');
+    const viet = m(BODY(100), 'Thứ') / m(BODY(100), 'Thu');
+    console.assert(narrow < 0.75, 'Pathway Gothic One NOT applied, ratio=' + narrow);
+    console.assert(prop < 0.8, "figures are tabular, wrong time font, ratio=" + prop);
+    console.assert(viet > 1.0, 'Vietnamese glyphs missing (Thứ measured as Thu)');
+    alert(`self-check — narrow ${narrow.toFixed(2)}<0.75, prop ${prop.toFixed(2)}<0.8, viet ${viet.toFixed(2)}>1`);
   });
 }
 </script>
