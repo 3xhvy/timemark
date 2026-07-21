@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>Timemark</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; background:#111; color:#eee; font:16px -apple-system,system-ui,sans-serif;
+         padding:env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 16px); }
+  h1 { font-size:20px; margin:16px 0; }
+  label { display:block; margin:12px 0 4px; font-size:13px; color:#999; }
+  input, button, textarea { width:100%; box-sizing:border-box; font:inherit; border-radius:10px;
+         border:1px solid #333; background:#1c1c1e; color:#eee; padding:10px; }
+  button { background:#F5B324; color:#000; font-weight:600; border:none; padding:14px; margin-top:16px; }
+  button:disabled { opacity:.4; }
+  #out { width:100%; margin-top:16px; border-radius:8px; display:none; }
+  .hint { font-size:12px; color:#777; margin-top:8px; }
+</style>
+</head>
+<body>
+<h1>Timemark</h1>
+
+<label>Ảnh</label>
+<input type="file" id="file" accept="image/*">
+
+<label>Thời gian</label>
+<input type="datetime-local" id="when">
+
+<label>Địa điểm</label>
+<textarea id="place" rows="2">139 Nguyễn Cơ Thạch, Thành Phố Hồ Chí Minh, P. An Khánh</textarea>
+
+<button id="save" disabled>Lưu ảnh</button>
+<p class="hint">Nếu không hiện bảng chia sẻ: nhấn giữ ảnh bên dưới → "Lưu vào Ảnh".</p>
+
+<img id="out" alt="">
+
+<script>
+const YELLOW = '#F5B324';
+const DAYS = ['Chủ Nhật','Thứ Hai','Thứ Ba','Thứ Tư','Thứ Năm','Thứ Sáu','Thứ Bảy'];
+
+const two = n => String(n).padStart(2, '0');
+const fmtTime = d => two(d.getHours()) + ':' + two(d.getMinutes());
+const fmtDate = d => `${d.getDate()} Tháng ${d.getMonth() + 1}, ${d.getFullYear()}`;
+const fmtDay  = d => DAYS[d.getDay()];
+
+// ponytail: greedy wrap, no hyphenation. Good enough for addresses.
+function wrap(ctx, text, maxW) {
+  const lines = [];
+  let line = '';
+  for (const word of text.split(/\s+/)) {
+    const test = line ? line + ' ' + word : word;
+    if (line && ctx.measureText(test).width > maxW) { lines.push(line); line = word; }
+    else line = test;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+// Random watermark ID, same shape as real Timemark stamps.
+const CODE = Array.from({length:13}, () =>
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random()*36)]).join('');
+
+function render(bitmap, date, place) {
+  const W = bitmap.width, H = bitmap.height, s = W / 960;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(bitmap, 0, 0);
+
+  ctx.textBaseline = 'alphabetic';
+  ctx.shadowColor = 'rgba(0,0,0,.55)';
+  ctx.shadowBlur = 6 * s;
+
+  // Big time, condensed by horizontal squash (iOS has no reliable condensed face).
+  ctx.save();
+  ctx.translate(30 * s, H - 140 * s);
+  ctx.scale(0.86, 1);
+  ctx.fillStyle = '#fff';
+  ctx.font = `700 ${112 * s}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
+  const timeW = ctx.measureText(fmtTime(date)).width * 0.86;
+  ctx.fillText(fmtTime(date), 0, 0);
+  ctx.restore();
+
+  // Yellow divider bar
+  const barX = 30 * s + timeW + 26 * s;
+  ctx.fillStyle = YELLOW;
+  ctx.fillRect(barX, H - 236 * s, 5 * s, 112 * s);
+
+  // Date + weekday
+  ctx.fillStyle = '#fff';
+  ctx.font = `400 ${31 * s}px -apple-system, "Helvetica Neue", Arial, sans-serif`;
+  ctx.fillText(fmtDate(date), barX + 26 * s, H - 198 * s);
+  ctx.fillText(fmtDay(date),  barX + 26 * s, H - 137 * s);
+
+  // Address (wraps)
+  ctx.font = `400 ${31 * s}px -apple-system, "Helvetica Neue", Arial, sans-serif`;
+  wrap(ctx, place.trim(), W - 300 * s).slice(0, 2).forEach((line, i) => {
+    ctx.fillText(line, 28 * s, H - 80 * s + i * 42 * s);
+  });
+
+  // Logo bottom-right
+  ctx.textAlign = 'right';
+  ctx.font = `700 ${30 * s}px -apple-system, "Helvetica Neue", Arial, sans-serif`;
+  const markW = ctx.measureText('mark').width;
+  ctx.fillText('mark', W - 28 * s, H - 48 * s);
+  ctx.fillStyle = YELLOW;
+  ctx.fillText('Time', W - 28 * s - markW, H - 48 * s);
+  ctx.fillStyle = '#ccc';
+  ctx.font = `400 ${20 * s}px -apple-system, "Helvetica Neue", Arial, sans-serif`;
+  ctx.fillText('100% Chân thực', W - 28 * s, H - 20 * s);
+
+  // Vertical verified strip on right edge
+  ctx.save();
+  ctx.translate(W - 22 * s, H / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#fff';
+  ctx.font = `400 ${20 * s}px -apple-system, "Helvetica Neue", Arial, sans-serif`;
+  ctx.fillText(`© ${CODE}  Timemark Verified`, 0, 0);
+  ctx.restore();
+
+  return c;
+}
+
+const $ = id => document.getElementById(id);
+let bitmap = null;
+
+$('when').value = new Date(Date.now() - new Date().getTimezoneOffset() * 6e4)
+  .toISOString().slice(0, 16);
+
+async function draw() {
+  if (!bitmap) return;
+  const date = $('when').value ? new Date($('when').value) : new Date();
+  const canvas = render(bitmap, date, $('place').value);
+  canvas.toBlob(b => {
+    $('out').src = URL.createObjectURL(b);
+    $('out').style.display = 'block';
+    $('save').disabled = false;
+    $('save').onclick = async () => {
+      const file = new File([b], 'timemark.jpg', { type: 'image/jpeg' });
+      if (navigator.canShare?.({ files: [file] })) {
+        try { await navigator.share({ files: [file] }); } catch {}
+      } else {
+        alert('Nhấn giữ ảnh bên dưới → Lưu vào Ảnh');
+      }
+    };
+  }, 'image/jpeg', 0.92);
+}
+
+$('file').onchange = async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  // from-image: respects EXIF so library photos don't come out sideways.
+  bitmap = await createImageBitmap(f, { imageOrientation: 'from-image' });
+  draw();
+};
+$('when').oninput = draw;
+$('place').oninput = draw;
+
+// ponytail: one self-check for the non-trivial bits (date words + wrap). Open with #test.
+if (location.hash === '#test') {
+  const d = new Date(2026, 6, 21, 11, 54);
+  console.assert(fmtTime(d) === '11:54', 'time', fmtTime(d));
+  console.assert(fmtDate(d) === '21 Tháng 7, 2026', 'date', fmtDate(d));
+  console.assert(fmtDay(d) === 'Thứ Ba', 'day', fmtDay(d));
+  const ctx = document.createElement('canvas').getContext('2d');
+  ctx.font = '20px sans-serif';
+  console.assert(wrap(ctx, 'a b c', 1e6).length === 1, 'wrap one line');
+  console.assert(wrap(ctx, 'aaaa bbbb cccc', 45).length >= 2, 'wrap splits');
+  alert('self-check done — see console');
+}
+</script>
+</body>
+</html>
