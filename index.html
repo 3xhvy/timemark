@@ -6,6 +6,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <title>Timemark</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Condensed:wght@700&display=swap">
 <style>
   :root { color-scheme: dark; }
   body { margin:0; background:#111; color:#eee; font:16px -apple-system,system-ui,sans-serif;
@@ -41,6 +43,17 @@
 const YELLOW = '#F5B324';
 const DAYS = ['Chủ Nhật','Thứ Hai','Thứ Ba','Thứ Tư','Thứ Năm','Thứ Sáu','Thứ Bảy'];
 
+const COND = px => `700 ${px}px "Roboto Condensed", "Helvetica Neue", Arial, sans-serif`;
+const BODY = (px, w = 400) => `${w} ${px}px Roboto, -apple-system, "Helvetica Neue", Arial, sans-serif`;
+
+// Google Fonts splits files by unicode-range, so the Vietnamese subset only
+// downloads if we ask for it by passing sample text with those glyphs.
+const fontsReady = Promise.all([
+  document.fonts.load(COND(100), '0123456789:'),
+  document.fonts.load(BODY(30), 'Thứ Ba Tháng Chân thực ễ ạ ồ'),
+  document.fonts.load(BODY(30, 700), 'Timemark'),
+]).catch(() => {});
+
 const two = n => String(n).padStart(2, '0');
 const fmtTime = d => two(d.getHours()) + ':' + two(d.getMinutes());
 const fmtDate = d => `${d.getDate()} Tháng ${d.getMonth() + 1}, ${d.getFullYear()}`;
@@ -74,15 +87,11 @@ function render(bitmap, date, place) {
   ctx.shadowColor = 'rgba(0,0,0,.55)';
   ctx.shadowBlur = 6 * s;
 
-  // Big time, condensed by horizontal squash (iOS has no reliable condensed face).
-  ctx.save();
-  ctx.translate(30 * s, H - 140 * s);
-  ctx.scale(0.86, 1);
+  // Big time
   ctx.fillStyle = '#fff';
-  ctx.font = `700 ${112 * s}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
-  const timeW = ctx.measureText(fmtTime(date)).width * 0.86;
-  ctx.fillText(fmtTime(date), 0, 0);
-  ctx.restore();
+  ctx.font = COND(118 * s);
+  const timeW = ctx.measureText(fmtTime(date)).width;
+  ctx.fillText(fmtTime(date), 30 * s, H - 140 * s);
 
   // Yellow divider bar
   const barX = 30 * s + timeW + 26 * s;
@@ -91,25 +100,25 @@ function render(bitmap, date, place) {
 
   // Date + weekday
   ctx.fillStyle = '#fff';
-  ctx.font = `400 ${31 * s}px -apple-system, "Helvetica Neue", Arial, sans-serif`;
+  ctx.font = BODY(31 * s);
   ctx.fillText(fmtDate(date), barX + 26 * s, H - 198 * s);
   ctx.fillText(fmtDay(date),  barX + 26 * s, H - 137 * s);
 
   // Address (wraps)
-  ctx.font = `400 ${31 * s}px -apple-system, "Helvetica Neue", Arial, sans-serif`;
+  ctx.font = BODY(31 * s);
   wrap(ctx, place.trim(), W - 300 * s).slice(0, 2).forEach((line, i) => {
     ctx.fillText(line, 28 * s, H - 80 * s + i * 42 * s);
   });
 
   // Logo bottom-right
   ctx.textAlign = 'right';
-  ctx.font = `700 ${30 * s}px -apple-system, "Helvetica Neue", Arial, sans-serif`;
+  ctx.font = BODY(30 * s, 700);
   const markW = ctx.measureText('mark').width;
   ctx.fillText('mark', W - 28 * s, H - 48 * s);
   ctx.fillStyle = YELLOW;
   ctx.fillText('Time', W - 28 * s - markW, H - 48 * s);
   ctx.fillStyle = '#ccc';
-  ctx.font = `400 ${20 * s}px -apple-system, "Helvetica Neue", Arial, sans-serif`;
+  ctx.font = BODY(20 * s);
   ctx.fillText('100% Chân thực', W - 28 * s, H - 20 * s);
 
   // Vertical verified strip on right edge
@@ -118,7 +127,7 @@ function render(bitmap, date, place) {
   ctx.rotate(-Math.PI / 2);
   ctx.textAlign = 'center';
   ctx.fillStyle = '#fff';
-  ctx.font = `400 ${20 * s}px -apple-system, "Helvetica Neue", Arial, sans-serif`;
+  ctx.font = BODY(20 * s);
   ctx.fillText(`© ${CODE}  Timemark Verified`, 0, 0);
   ctx.restore();
 
@@ -133,6 +142,7 @@ $('when').value = new Date(Date.now() - new Date().getTimezoneOffset() * 6e4)
 
 async function draw() {
   if (!bitmap) return;
+  await fontsReady;
   const date = $('when').value ? new Date($('when').value) : new Date();
   const canvas = render(bitmap, date, $('place').value);
   canvas.toBlob(b => {
@@ -170,7 +180,13 @@ if (location.hash === '#test') {
   ctx.font = '20px sans-serif';
   console.assert(wrap(ctx, 'a b c', 1e6).length === 1, 'wrap one line');
   console.assert(wrap(ctx, 'aaaa bbbb cccc', 45).length >= 2, 'wrap splits');
-  alert('self-check done — see console');
+  fontsReady.then(() => {
+    const cond = document.fonts.check(COND(100));
+    const body = document.fonts.check(BODY(30), 'Thứ Ba');
+    console.assert(cond, 'Roboto Condensed not loaded');
+    console.assert(body, 'Roboto vietnamese subset not loaded');
+    alert(`self-check done — condensed:${cond} body:${body}`);
+  });
 }
 </script>
 </body>
