@@ -112,9 +112,9 @@ function render(bitmap, date, place) {
   ctx.fillText(fmtDay(date),  timeEnd + 35 * s, H - 136 * s);
 
   // Address (wraps, 2 lines max)
-  ctx.font = BODY(30 * s);
-  wrap(ctx, place.trim(), W - 340 * s).slice(0, 2).forEach((line, i) => {
-    ctx.fillText(line, 28 * s, H - 88 * s + i * 47 * s);
+  ctx.font = BODY(35 * s);
+  wrap(ctx, place.trim(), W - 300 * s).slice(0, 2).forEach((line, i) => {
+    ctx.fillText(line, 25 * s, H - 80 * s + i * 42 * s);
   });
 
   // Logo bottom-right
